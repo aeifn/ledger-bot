@@ -18,21 +18,19 @@ async function isUserAllowed(userId: number) {
   return !!result;
 }
 
-async function auth(ctx: Context, next: NextFunction) {
+const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
+if (!BOT_TOKEN) throw new Error("BOT_TOKEN is not defined");
+
+const bot = new Bot(BOT_TOKEN);
+
+bot.use(async (ctx: Context, next: NextFunction) => {
   if (!ctx.from || !(await isUserAllowed(ctx.from.id))) {
     await ctx.reply("You are not allowed to use this bot");
     return;
   } else {
     await next();
   }
-}
-
-const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
-if (!BOT_TOKEN) throw new Error("BOT_TOKEN is not defined");
-
-const bot = new Bot(BOT_TOKEN);
-
-bot.use(auth);
+});
 
 class GitRepo {
   repoPath: string;
