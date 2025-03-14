@@ -48,6 +48,10 @@ class GitRepo {
       env: { GIT_SSH_COMMAND },
     }).spawn();
   }
+  async reset() {
+    await this.run(["fetch", "origin"]).status;
+    await this.run(["reset", "--hard", "origin/main"]).status;
+  }
 }
 
 class Ledger {
@@ -75,8 +79,7 @@ class Ledger {
 bot.command("ledger", async (ctx) => {
   if (!ctx.from) return;
   const git = new GitRepo(ctx.from.id);
-  await git.run(["fetch", "origin"]).status;
-  await git.run(["reset", "--hard", "origin/main"]).status;
+  await git.reset();
   const ledger = new Ledger(ctx.from.id, "current");
   const result = await ledger.run(ctx.match.split(" "));
   const message = "```ledger\n" + result.substring(0, 4000) + "\n```";
@@ -87,8 +90,7 @@ bot.on("message", async (ctx) => {
   const content = ctx.message.text || ctx.message.caption || "...";
   const git = new GitRepo(ctx.from.id);
   const ledger = new Ledger(ctx.from.id);
-  await git.run(["fetch", "origin"]).status;
-  await git.run(["reset", "--hard", "origin/main"]).status;
+  await git.reset();
   await ledger.write(content);
   await git.run(["add", ledger.file]).status;
   await git.run(["commit", "-m", `${ledger.date} ${content}`]).status;
