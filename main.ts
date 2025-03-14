@@ -59,8 +59,8 @@ class Ledger {
     this.date = date ||
       new Date().toISOString().split("T")[0].replace(/-/g, "/");
     this.file = `${BOT_DATA_DIR}/${userId}/ledger/${this.date}.ledger`;
-    const directory = this.file.split('/').slice(0,-1).join('/');
-    Deno.mkdirSync(directory, {recursive: true});
+    const directory = this.file.split("/").slice(0, -1).join("/");
+    Deno.mkdirSync(directory, { recursive: true });
   }
   async write(content: string) {
     await Deno.writeTextFile(this.file, `\n${this.date} ${content}\n`, {
@@ -78,25 +78,35 @@ class Ledger {
 
 bot.command("ledger", async (ctx) => {
   if (!ctx.from) return;
-  const git = new GitRepo(ctx.from.id);
-  await git.reset();
-  const ledger = new Ledger(ctx.from.id, "current");
-  const result = await ledger.run(ctx.match.split(" "));
-  const message = "```ledger\n" + result.substring(0, 4000) + "\n```";
-  await ctx.reply(message, { parse_mode: "MarkdownV2" });
+  try {
+    const git = new GitRepo(ctx.from.id);
+    await git.reset();
+    const ledger = new Ledger(ctx.from.id, "current");
+    const result = await ledger.run(ctx.match.split(" "));
+    const message = "```ledger\n" + result.substring(0, 4000) + "\n```";
+    await ctx.reply(message, { parse_mode: "MarkdownV2" });
+  } catch (error) {
+    console.error("Message processing error:", error);
+    await ctx.reply("Дошло је до грешке.");
+  }
 });
 
 bot.on("message", async (ctx) => {
-  const content = ctx.message.text || ctx.message.caption || "...";
-  console.log(content);
-  const git = new GitRepo(ctx.from.id);
-  const ledger = new Ledger(ctx.from.id);
-  await git.reset();
-  await ledger.write(content);
-  await git.run(["add", ledger.file]).status;
-  await git.run(["commit", "-m", `${ledger.date} ${content}`]).status;
-  await git.run(["push"]).status;
-  await ctx.react("👌");
+  try {
+    const content = ctx.message.text || ctx.message.caption || "...";
+    console.log(content);
+    const git = new GitRepo(ctx.from.id);
+    const ledger = new Ledger(ctx.from.id);
+    await git.reset();
+    await ledger.write(content);
+    await git.run(["add", ledger.file]).status;
+    await git.run(["commit", "-m", `${ledger.date} ${content}`]).status;
+    await git.run(["push"]).status;
+    await ctx.react("👌");
+  } catch (error) {
+    console.error("Message processing error:", error);
+    await ctx.reply("Дошло је до грешке.");
+  }
 });
 
 bot.start();
