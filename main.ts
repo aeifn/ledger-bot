@@ -34,57 +34,65 @@ const bot = new Bot(BOT_TOKEN);
 
 bot.use(auth);
 
-function getUserConfig(userId: number) {
-  return {
-    ledgerPath: `${BOT_DATA_DIR}/${userId}/ledger`,
-    sshKey: `${BOT_DATA_DIR}/${userId}/.ssh/id_ed25519`,
-  };
+class GitRepo {
+  repoPath: string;
+  sshKey: string;
+  constructor(private userId: number) {
+    this.repoPath = `${BOT_DATA_DIR}/${userId}/ledger`;
+    this.sshKey = `${BOT_DATA_DIR}/${userId}/.ssh/id_ed25519`;
+  }
+  run(args: string[]) {
+    const GIT_SSH_COMMAND = `ssh -i ${this.sshKey} -o IdentitiesOnly=yes`;
+    return new Deno.Command("git", {
+      args: ["-C", this.repoPath, ...args],
+      env: { GIT_SSH_COMMAND },
+    }).spawn();
+  }
 }
 
-function git(
-  sshKey: string,
-  args: Array<string>,
-) {
-  const GIT_SSH_COMMAND = `ssh -i ${sshKey} -o IdentitiesOnly=yes`;
-  return new Deno.Command("git", { args: args, env: { GIT_SSH_COMMAND } })
-    .spawn();
+class Ledger {
+  file: string;
+  date: string;
+  constructor(private userId: number, date?: string) {
+    this.date = date ||
+      new Date().toISOString().split("T")[0].replace(/-/g, "/");
+    this.file = `${BOT_DATA_DIR}/${userId}/ledger/${this.date}.ledger`;
+  }
+  async write(content: string) {
+    await Deno.writeTextFile(this.file, `\n${this.date} ${content}\n`, {
+      append: true,
+    });
+  }
+  async run(args: Array<string>) {
+    console.log("running", this.file);
+    const cmd = await new Deno.Command("ledger", {
+      args: ["-f", this.file].concat(args),
+    }).output();
+    return new TextDecoder().decode(cmd.stdout);
+  }
 }
 
 bot.command("ledger", async (ctx) => {
   if (!ctx.from) return;
-  const { ledgerPath, sshKey } = getUserConfig(ctx.from.id);
-  await git(sshKey, ["-C", ledgerPath, "fetch", "origin"]).status;
-  await git(sshKey, ["-C", ledgerPath, "reset", "--hard", "origin/main"])
-    .status;
-  const cmd = await new Deno.Command("ledger", {
-    args: ["-f", `${ledgerPath}/current.ledger`].concat(ctx.match.split(" ")),
-  }).output();
-  const stdout = new TextDecoder().decode(cmd.stdout);
-  const message = "```ledger\n" + stdout.substring(0, 4000) +
-    "\n```";
+  const git = new GitRepo(ctx.from.id);
+  await git.run(["fetch", "origin"]).status;
+  await git.run(["reset", "--hard", "origin/main"]).status;
+  const ledger = new Ledger(ctx.from.id, "current");
+  const result = await ledger.run(ctx.match.split(" "));
+  const message = "```ledger\n" + result.substring(0, 4000) + "\n```";
   await ctx.reply(message, { parse_mode: "MarkdownV2" });
 });
 
 bot.on("message", async (ctx) => {
-  if (!ctx.from) return;
-  const { ledgerPath, sshKey } = getUserConfig(ctx.from.id);
-  await git(sshKey, ["-C", ledgerPath, "fetch", "origin"]).status;
-  await git(sshKey, ["-C", ledgerPath, "reset", "--hard", "origin/main"])
-    .status;
-
-  const date = new Date().toISOString().split("T")[0].replace(/-/g, "/");
-  const filePath = `${ledgerPath}/${date}.ledger`;
-  const content = ctx.message.text || ctx.message.caption;
-  if (!content) return;
-
-  await Deno.writeTextFile(filePath, `\n${date} ${content}\n`, {
-    append: true,
-  });
-  await git(sshKey, ["-C", ledgerPath, "add", filePath]).status;
-  await git(sshKey, ["-C", ledgerPath, "commit", "-m", `${date} ${content}`])
-    .status;
-  await git(sshKey, ["-C", ledgerPath, "push"])
-    .status;
+  const content = ctx.message.text || ctx.message.caption || "...";
+  const git = new GitRepo(ctx.from.id);
+  const ledger = new Ledger(ctx.from.id);
+  await git.run(["fetch", "origin"]).status;
+  await git.run(["reset", "--hard", "origin/main"]).status;
+  await ledger.write(content);
+  await git.run(["add", ledger.file]).status;
+  await git.run(["commit", "-m", `${ledger.date} ${content}`]).status;
+  await git.run(["push"]).status;
   await ctx.react("👌");
 });
 
