@@ -59,6 +59,8 @@ class Ledger {
     this.date = date ||
       new Date().toISOString().split("T")[0].replace(/-/g, "/");
     this.file = `${BOT_DATA_DIR}/${userId}/ledger/${this.date}.ledger`;
+    const directory = this.file.split('/').slice(0,-1).join('/');
+    Deno.mkdirSync(directory, {recursive: true});
   }
   async write(content: string) {
     await Deno.writeTextFile(this.file, `\n${this.date} ${content}\n`, {
@@ -86,6 +88,7 @@ bot.command("ledger", async (ctx) => {
 
 bot.on("message", async (ctx) => {
   const content = ctx.message.text || ctx.message.caption || "...";
+  console.log(content);
   const git = new GitRepo(ctx.from.id);
   const ledger = new Ledger(ctx.from.id);
   await git.reset();
