@@ -83,7 +83,8 @@ bot.on("message", async (ctx) => {
   await git(sshKey, ["-C", ledgerPath, "add", filePath]).status;
   await git(sshKey, ["-C", ledgerPath, "commit", "-m", `${date} ${content}`])
     .status;
-
+  await git(sshKey, ["-C", ledgerPath, "push"])
+    .status;
   await ctx.react("👌");
 });
 

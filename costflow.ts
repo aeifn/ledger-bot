@@ -14,7 +14,7 @@ const config = {
 };
 
 const fn = async () => {
-  const result = await costflow("10 a b c @mypayee visa > spotify", config);
+  const result = await costflow("10 a b c @mypayee #sdfs #sdf visa > spotify", config);
   console.log(result);
 };
 fn();
